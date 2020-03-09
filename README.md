@@ -1,68 +1,19 @@
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# web-socket-domain-security
+The WebSocketDomainSecurity project uses web sockets to validate and register a browser session with a set of protected services. If the browser session is valid, access is granted to the protected services.  Validation of the browser session is accomplished through randomized shared secrets and requiring the browser to verify its domain. This project uses AWS Lambda, Step Functions, Node.js, DynamoDB and Cloudformation.
 
-## Available Scripts
 
-In the project directory, you can run:
 
-### `npm start`
+![Web Socket Domain Security](https://github.com/mlindeboom/wsds-react-client/blob/master/wsds-client.svg)
 
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
 
-The page will reload if you make edits.<br>
-You will also see any lint errors in the console.
+1. $connect - A browser client first connects to the WebSocket API. In the gateway, a connectionId value is generated that uniquely identifies this browser client. The wsdsConnect lambda function stores the value in the connectionsDB as a new entry. A stepfunction workflow is started by the wsdsConnect function.
 
-### `npm test`
+2. connectionId - The websocket interface communicates the connectionId back to the browser client. The browser code should keep this value to use in subsequent calls.
 
-Launches the test runner in the interactive watch mode.<br>
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+3. sendExecutable - The websocket interface sends a payload containing a JavaScript function to the browser client for the browser to execute. The results of the function must be sent back through the interface in step 4.
 
-### `npm run build`
+4. onMessage - The browser execution results of the JavaScript function are sent back through the WebSocket interface to be analyzed by the wsdsVerificationResult lambda function. If the execution results match those expected by the lambda function, a pass indication is given to the waiting step function. The ConnectionValid path will call wsdsValidConnect which, in turn, updates the connectionDB to mark the connectionId as verified. The ConnectionInvalid step function path leaves the connectionId unmarked indicating it is not verified.
 
-Builds the app for production to the `build` folder.<br>
-It correctly bundles React in production mode and optimizes the build for the best performance.
+5. REST call with connectionId - Once the connectionId is verified through the websocket, REST calls can be made from the browser to the API Gateway resources protected by the wsdsAuthenticator. The REST call must have the connectionId in the request header. The wsdsAuthenticator uses the connectionId value to query the connectionsDB to see if the connectionId has been verified. Unverified connections get a 401 code returned. Requests using a verified connectionId are passed through to the protected resource. Note: the authenticator uses a default TTL of 5 minutes to cache the results of the current authentication. 
 
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (Webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/code-splitting
-
-### Analyzing the Bundle Size
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size
-
-### Making a Progressive Web App
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app
-
-### Advanced Configuration
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/advanced-configuration
-
-### Deployment
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/deployment
-
-### `npm run build` fails to minify
-
-This section has moved here: https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify
+6. $disconnect - if the websocket becomes disconnected, the connectionId is removed from the connectionsDB.
